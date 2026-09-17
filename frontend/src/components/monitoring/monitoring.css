@@ -1,0 +1,220 @@
+/* ============================================================
+   MONITORING / CAMERA STYLES
+   ============================================================ */
+
+/* ---- Camera Card ---- */
+.camera-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.camera-card:hover {
+  border-color: var(--info-border);
+  box-shadow: 0 0 0 1px var(--info-border);
+}
+
+.camera-card--offline {
+  opacity: 0.7;
+}
+
+.camera-card--offline:hover {
+  border-color: var(--border);
+  box-shadow: none;
+  opacity: 0.85;
+}
+
+.camera-card__feed {
+  position: relative;
+}
+
+.camera-card__cctv {
+  border-radius: 0;
+}
+
+.camera-card__offline {
+  aspect-ratio: 16 / 9;
+  background: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+  font-weight: 600;
+}
+
+.camera-card__offline-time {
+  font-size: var(--font-xs);
+  font-weight: 400;
+}
+
+.camera-card__cam-id {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(56, 189, 248, 0.7);
+  background: rgba(7, 17, 31, 0.6);
+  padding: 1px 5px;
+  border-radius: 3px;
+  z-index: 10;
+}
+
+.camera-card__info {
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.camera-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.camera-card__id {
+  font-size: var(--font-sm);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.camera-card__status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.camera-card__status--online { color: var(--safe); }
+.camera-card__status--offline { color: var(--text-muted); }
+
+.camera-card__name {
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+}
+
+.camera-card__zone {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+}
+
+.camera-card__fps {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* ---- Camera Grid ---- */
+.camera-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-4);
+}
+
+/* ---- Monitoring Wall ---- */
+.monitoring-wall {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: var(--space-4);
+}
+
+.monitoring-wall__primary {
+  min-height: 0;
+}
+
+.monitoring-wall__secondary {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+  align-content: start;
+}
+
+.monitoring-wall__secondary .camera-card__cctv {
+  aspect-ratio: 16 / 10;
+}
+
+/* ---- Monitoring Controls ---- */
+.monitoring-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  flex-wrap: wrap;
+}
+
+.monitoring-controls__btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 6px 12px;
+  font-size: var(--font-xs);
+  font-weight: 500;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: all var(--transition);
+}
+
+.monitoring-controls__btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.monitoring-controls__btn--active {
+  background: var(--info-bg);
+  border-color: var(--info-border);
+  color: var(--info);
+}
+
+/* ---- Cameras Page Filters ---- */
+.cameras-filters {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.cameras-filters select {
+  padding: 6px 12px;
+  font-size: var(--font-xs);
+}
+
+.cameras-filters__count {
+  margin-left: auto;
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 1200px) {
+  .monitoring-wall {
+    grid-template-columns: 1fr;
+  }
+  .monitoring-wall__secondary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .camera-grid {
+    grid-template-columns: 1fr;
+  }
+  .monitoring-wall__secondary {
+    grid-template-columns: 1fr;
+  }
+}
