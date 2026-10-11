@@ -2,15 +2,6 @@
 datasets/
 merged_dataset/
 
-# Models and Weights
-models/pretrained/
-models/trained/
-*.pt
-*.onnx
-
-# Ultralytics/YOLO default output folders
-runs/
-yolov8n.pt
 
 # Python and Environments
 __pycache__/

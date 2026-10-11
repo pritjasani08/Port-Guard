@@ -56,7 +56,8 @@ class ModelTrainer:
             project=str(TRAINED_DIR),
             name="custom_yolov8_run",
             exist_ok=True, # overwrite the same folder if we run it multiple times
-            device=0       # Forces it to use your RTX 2050 (GPU 0)
+            device=0,      # Forces it to use your RTX 2050 (GPU 0)
+            workers=2      # 2 workers: high GPU utilization while fitting safely within virtual memory
         )
         
         print("\n" + "="*50)

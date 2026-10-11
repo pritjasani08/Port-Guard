@@ -35,7 +35,7 @@ ai-ml/
 ```
 
 ## ⚙️ Prerequisites
-- Python 3.8+
+- Python 3.14
 - An NVIDIA GPU (e.g., RTX 2050) is highly recommended for faster training.
 
 ## 🚀 How to Start Training
