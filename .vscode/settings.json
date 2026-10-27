@@ -1,0 +1,10 @@
+{
+  "liveServer.settings.ignoreFiles": [
+    "**/ai-ml/**",
+    "**/temp_outputs/**",
+    "**/*.mp4",
+    "**/*.pt",
+    "**/*.jpg",
+    "**/*.png"
+  ]
+}

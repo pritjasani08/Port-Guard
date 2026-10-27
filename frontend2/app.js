@@ -52,7 +52,44 @@ document.addEventListener("DOMContentLoaded", () => {
   checkServerHealth();
   setupSliders();
   setupDropzone();
+  checkCachedResults();
 });
+
+function checkCachedResults() {
+  try {
+    const cached = sessionStorage.getItem("portguard_last_video");
+    if (cached) {
+      const data = JSON.parse(cached);
+      if (!document.getElementById("restore-banner")) {
+        const banner = document.createElement("div");
+        banner.id = "restore-banner";
+        banner.className = "restore-banner";
+        banner.innerHTML = `
+          <span>🎬 <strong>Previous Video Result Available</strong> (${data.processed_frames} frames • ${data.total_detections} objects)</span>
+          <button type="button" class="btn-restore" onclick="restoreCachedVideo()">Restore Result</button>
+        `;
+        const controlPanel = document.querySelector(".control-panel");
+        if (controlPanel && controlPanel.parentNode) {
+          controlPanel.parentNode.insertBefore(banner, controlPanel.nextSibling);
+        }
+      }
+    }
+  } catch (_) {}
+}
+
+function restoreCachedVideo() {
+  try {
+    const cached = sessionStorage.getItem("portguard_last_video");
+    if (!cached) return;
+    const data = JSON.parse(cached);
+    switchMode("video");
+    renderVideoResults(data);
+    const banner = document.getElementById("restore-banner");
+    if (banner) banner.remove();
+  } catch (e) {
+    console.error("Failed to restore cached video:", e);
+  }
+}
 
 async function checkServerHealth() {
   try {
@@ -76,20 +113,22 @@ async function checkServerHealth() {
 // -------------------------------------------------------------
 function switchMode(mode) {
   currentMode = mode;
-  document.getElementById("tab-image").classList.toggle("active", mode === "image");
-  document.getElementById("tab-video").classList.toggle("active", mode === "video");
+  const tabImage = document.getElementById("tab-image");
+  const tabVideo = document.getElementById("tab-video");
+  if (tabImage) tabImage.classList.toggle("active", mode === "image");
+  if (tabVideo) tabVideo.classList.toggle("active", mode === "video");
 
   clearSelectedFile();
-  resultsView.classList.add("hidden");
+  if (resultsView) resultsView.classList.add("hidden");
 
   if (mode === "image") {
-    fileInput.accept = "image/*";
-    fileHint.textContent = "Supports JPG, PNG, WEBP (Photo Mode)";
-    iouGroup.style.display = "flex";
+    if (fileInput) fileInput.accept = "image/*,.jpg,.jpeg,.png,.webp,.bmp";
+    if (fileHint) fileHint.textContent = "Supports JPG, PNG, WEBP (Photo Mode)";
+    if (iouGroup) iouGroup.style.display = "flex";
   } else {
-    fileInput.accept = "video/mp4,video/quicktime,video/avi";
-    fileHint.textContent = "Supports MP4, MOV, AVI (Video Mode - max 300 frames)";
-    iouGroup.style.display = "none";
+    if (fileInput) fileInput.accept = "video/*,video/mp4,video/quicktime,video/x-msvideo,video/avi,.mp4,.mov,.avi,.mkv,.webm";
+    if (fileHint) fileHint.textContent = "Supports MP4, MOV, AVI, WEBM (Video Mode)";
+    if (iouGroup) iouGroup.style.display = "none";
   }
 }
 
@@ -97,18 +136,36 @@ function switchMode(mode) {
 // 3. Slider Controls
 // -------------------------------------------------------------
 function setupSliders() {
-  confSlider.addEventListener("input", (e) => {
-    confVal.textContent = `${Math.round(e.target.value * 100)}%`;
-  });
-  iouSlider.addEventListener("input", (e) => {
-    iouVal.textContent = `${Math.round(e.target.value * 100)}%`;
-  });
+  if (confSlider && confVal) {
+    confSlider.addEventListener("input", (e) => {
+      confVal.textContent = `${Math.round(e.target.value * 100)}%`;
+    });
+  }
+  if (iouSlider && iouVal) {
+    iouSlider.addEventListener("input", (e) => {
+      iouVal.textContent = `${Math.round(e.target.value * 100)}%`;
+    });
+  }
 }
 
 // -------------------------------------------------------------
 // 4. File Dropzone & Selection Handling
 // -------------------------------------------------------------
 function setupDropzone() {
+  if (!dropzone || !fileInput) return;
+
+  // Clicking anywhere on dropzone triggers file picker
+  dropzone.addEventListener("click", (e) => {
+    if (e.target.closest(".btn-clear") || e.target.closest("#file-input")) {
+      return;
+    }
+    triggerFileInput();
+  });
+
+  fileInput.addEventListener("click", (e) => {
+    e.stopPropagation();
+  });
+
   ["dragenter", "dragover"].forEach((eventName) => {
     dropzone.addEventListener(eventName, (e) => {
       e.preventDefault();
@@ -126,7 +183,7 @@ function setupDropzone() {
   });
 
   dropzone.addEventListener("drop", (e) => {
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       handleFileSelected(e.dataTransfer.files[0]);
     }
   });
@@ -139,31 +196,40 @@ function setupDropzone() {
 }
 
 function triggerFileInput() {
-  fileInput.click();
+  if (fileInput) {
+    // Reset value so re-selecting identical file still fires change event
+    fileInput.value = "";
+    fileInput.click();
+  }
 }
 
 function handleFileSelected(file) {
+  if (!file) return;
   selectedFile = file;
-  selectedFileName.textContent = file.name;
-  selectedFileSize.textContent = formatBytes(file.size);
-  filePreviewStrip.classList.remove("hidden");
-  detectBtn.disabled = false;
+
+  if (selectedFileName) selectedFileName.textContent = file.name;
+  if (selectedFileSize) selectedFileSize.textContent = formatBytes(file.size);
+  if (filePreviewStrip) filePreviewStrip.classList.remove("hidden");
+  if (detectBtn) detectBtn.disabled = false;
 
   // Pre-load original image preview if image
   if (currentMode === "image" && file.type.startsWith("image/")) {
     const reader = new FileReader();
     reader.onload = (e) => {
-      originalImage.src = e.target.result;
+      if (originalImage) originalImage.src = e.target.result;
     };
     reader.readAsDataURL(file);
   }
 }
 
-function clearSelectedFile() {
+function clearSelectedFile(e) {
+  if (e && e.stopPropagation) e.stopPropagation();
   selectedFile = null;
-  fileInput.value = "";
-  filePreviewStrip.classList.add("hidden");
-  detectBtn.disabled = true;
+  if (fileInput) fileInput.value = "";
+  if (filePreviewStrip) filePreviewStrip.classList.add("hidden");
+  if (detectBtn) detectBtn.disabled = true;
+  if (originalImage) originalImage.src = "";
+  if (annotatedImage) annotatedImage.src = "";
 }
 
 function formatBytes(bytes) {
@@ -176,21 +242,28 @@ function formatBytes(bytes) {
 // 5. Run AI Detection Execution
 // -------------------------------------------------------------
 async function runDetection() {
-  if (!selectedFile) return;
+  if (!selectedFile) {
+    alert("Please select or drop an image or video file first!");
+    return;
+  }
 
   // UI state
-  detectBtn.disabled = true;
-  processingView.classList.remove("hidden");
-  resultsView.classList.add("hidden");
+  if (detectBtn) detectBtn.disabled = true;
+  if (processingView) processingView.classList.remove("hidden");
+  if (resultsView) resultsView.classList.add("hidden");
 
   const formData = new FormData();
   formData.append("file", selectedFile);
-  formData.append("conf", parseFloat(confSlider.value));
+  const confValue = confSlider ? parseFloat(confSlider.value) : 0.25;
+  formData.append("conf", isNaN(confValue) ? 0.25 : confValue);
 
   try {
     if (currentMode === "image") {
-      formData.append("iou", parseFloat(iouSlider.value));
-      processingStatusText.textContent = "Running YOLOv8n inference on your RTX 2050...";
+      const iouValue = iouSlider ? parseFloat(iouSlider.value) : 0.45;
+      formData.append("iou", isNaN(iouValue) ? 0.45 : iouValue);
+      if (processingStatusText) {
+        processingStatusText.textContent = "Running YOLOv8n inference on your RTX 2050...";
+      }
 
       const response = await fetch(`${API_BASE}/predict/image`, {
         method: "POST",
@@ -198,35 +271,64 @@ async function runDetection() {
       });
 
       if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.detail || "Prediction failed");
+        let errorDetail = "Prediction failed";
+        try {
+          const err = await response.json();
+          errorDetail = err.detail || errorDetail;
+        } catch (_) {}
+        throw new Error(errorDetail);
       }
 
       const data = await response.json();
       currentResult = data;
       renderImageResults(data);
     } else {
-      processingStatusText.textContent = "Processing video frames through YOLOv8n (RTX 2050)...";
-
-      const response = await fetch(`${API_BASE}/predict/video`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.detail || "Video prediction failed");
+      let secondsElapsed = 0;
+      if (processingStatusText) {
+        processingStatusText.textContent = "Uploading & analyzing video through YOLOv8n (0s)... Please wait";
       }
+      const progressTimer = setInterval(() => {
+        secondsElapsed++;
+        if (processingStatusText) {
+          processingStatusText.textContent = `Analyzing video frames through YOLOv8n on GPU (${secondsElapsed}s elapsed)... Please wait`;
+        }
+      }, 1000);
 
-      const data = await response.json();
-      currentResult = data;
-      renderVideoResults(data);
+      try {
+        const response = await fetch(`${API_BASE}/predict/video`, {
+          method: "POST",
+          body: formData,
+        });
+
+        clearInterval(progressTimer);
+
+        if (!response.ok) {
+          let errorDetail = "Video prediction failed";
+          try {
+            const err = await response.json();
+            errorDetail = err.detail || errorDetail;
+          } catch (_) {}
+          throw new Error(errorDetail);
+        }
+
+        const data = await response.json();
+        currentResult = data;
+        // Save to sessionStorage so switching tabs or page reloads never lose the result
+        try {
+          sessionStorage.setItem("portguard_last_video", JSON.stringify(data));
+        } catch (_) {}
+        renderVideoResults(data);
+      } catch (err) {
+        clearInterval(progressTimer);
+        throw err;
+      }
     }
   } catch (error) {
-    alert(`Error: ${error.message}`);
+    console.error("Detection error:", error);
+    alert(`Detection Error: ${error.message}\nMake sure your server is running on http://127.0.0.1:8000`);
   } finally {
-    processingView.classList.add("hidden");
-    detectBtn.disabled = false;
+    if (processingView) processingView.classList.add("hidden");
+    if (detectBtn) detectBtn.disabled = false;
   }
 }
 
@@ -271,27 +373,39 @@ function renderImageResults(data) {
   }
 
   // Smooth scroll to results
-  resultsView.scrollIntoView({ behavior: "smooth", block: "start" });
+  setTimeout(() => {
+    resultsView.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 100);
 }
 
 function renderVideoResults(data) {
-  imageVisualizer.classList.add("hidden");
-  videoVisualizer.classList.remove("hidden");
-  resultsView.classList.remove("hidden");
+  if (imageVisualizer) imageVisualizer.classList.add("hidden");
+  if (videoVisualizer) videoVisualizer.classList.remove("hidden");
+  if (resultsView) resultsView.classList.remove("hidden");
 
-  metaStats.textContent = `⚡ Processed ${data.processed_frames} frames in ${data.processing_time_sec}s (${data.fps} FPS) | Total Objects: ${data.total_detections}`;
+  // Remove existing restore banner if present
+  const existingBanner = document.getElementById("restore-banner");
+  if (existingBanner) existingBanner.remove();
 
-  countHelmet.textContent = data.class_counts["helmet"] || 0;
-  countJacket.textContent = data.class_counts["safety_jacket"] || 0;
-  countFire.textContent = data.class_counts["fire"] || 0;
-  countSmoke.textContent = data.class_counts["smoke"] || 0;
-  countPerson.textContent = data.class_counts["person"] || 0;
+  if (metaStats) {
+    metaStats.textContent = `⚡ Processed ${data.processed_frames} frames in ${data.processing_time_sec}s (${data.fps} FPS) | Total Objects: ${data.total_detections}`;
+  }
 
-  // Set video source
+  if (countHelmet) countHelmet.textContent = data.class_counts["helmet"] || 0;
+  if (countJacket) countJacket.textContent = data.class_counts["safety_jacket"] || 0;
+  if (countFire) countFire.textContent = data.class_counts["fire"] || 0;
+  if (countSmoke) countSmoke.textContent = data.class_counts["smoke"] || 0;
+  if (countPerson) countPerson.textContent = data.class_counts["person"] || 0;
+
+  // Set video source cleanly
   const videoSrc = `${API_BASE}${data.video_url}`;
-  processedVideo.src = videoSrc;
-  processedVideo.load();
-  processedVideo.play().catch((e) => console.log("Autoplay prevented:", e));
+  if (processedVideo) {
+    processedVideo.pause();
+    processedVideo.removeAttribute("src");
+    processedVideo.innerHTML = `<source src="${videoSrc}" type="video/mp4">`;
+    processedVideo.load();
+    processedVideo.play().catch((e) => console.log("Autoplay notice:", e));
+  }
 
   // Render Keyframe Snapshots
   const snapshotsContainer = document.getElementById("video-snapshots-container");

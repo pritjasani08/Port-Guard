@@ -30,7 +30,9 @@ if not MODEL_PATH.exists():
     if alt_path.exists():
         MODEL_PATH = alt_path
 
-TEMP_VIDEO_DIR = BASE_DIR / "temp_outputs"
+# Store temporary processed videos in the OS temp directory so that IDEs,
+# file watchers, and VS Code Live Server do not trigger a page reload when a video file is created.
+TEMP_VIDEO_DIR = Path(tempfile.gettempdir()) / "portguard_processed_videos"
 TEMP_VIDEO_DIR.mkdir(parents=True, exist_ok=True)
 
 # -------------------------------------------------------------
@@ -211,7 +213,7 @@ async def predict_video(
     out_filename = f"processed_{int(time.time())}.mp4"
     out_path = TEMP_VIDEO_DIR / out_filename
 
-    # Initialize true browser-compatible H.264 encoder
+    # Initialize true browser-compatible H.264 encoder with ultrafast preset
     writer = imageio_ffmpeg.write_frames(
         str(out_path),
         (target_w, target_h),
@@ -219,6 +221,7 @@ async def predict_video(
         codec="libx264",
         pix_fmt_in="bgr24",
         pix_fmt_out="yuv420p",
+        output_params=["-preset", "ultrafast", "-crf", "23"],
         ffmpeg_log_level="warning"
     )
     writer.send(None)  # initialize generator
@@ -230,7 +233,10 @@ async def predict_video(
     detection_log = []
 
     start_time = time.time()
-    MAX_FRAMES = 600
+    MAX_FRAMES = 450
+    # Process every 2nd frame if high FPS to cut inference time by 50% while keeping smooth video
+    stride = 2 if fps >= 20 else 1
+    latest_annotated_frame = None
 
     try:
         while cap.isOpened() and frame_count < MAX_FRAMES:
@@ -241,50 +247,54 @@ async def predict_video(
             if frame.shape[1] != target_w or frame.shape[0] != target_h:
                 frame = cv2.resize(frame, (target_w, target_h))
 
-            # Run YOLO model inference
-            results = model.predict(source=frame, conf=conf, device=device, verbose=False)
-            res = results[0]
+            # Run YOLO model inference on stride frames
+            if frame_count % stride == 0 or latest_annotated_frame is None:
+                results = model.predict(source=frame, conf=conf, device=device, verbose=False)
+                res = results[0]
 
-            # Use Ultralytics plot() for high-visibility bounding boxes
-            annotated_frame = res.plot(line_width=2, font_size=1.0)
+                # Use Ultralytics plot() for high-visibility bounding boxes
+                annotated_frame = res.plot(line_width=2, font_size=1.0)
+                latest_annotated_frame = annotated_frame
 
-            boxes_in_frame = len(res.boxes)
-            if boxes_in_frame > 0:
-                total_detections_across_frames += boxes_in_frame
-                frame_classes = []
-                for box in res.boxes:
-                    cls_id = int(box.cls[0].item())
-                    cls_name = model.names.get(cls_id, f"class_{cls_id}")
-                    confidence = float(box.conf[0].item())
-                    xyxy = box.xyxy[0].tolist()
-                    class_occurrence[cls_name] = class_occurrence.get(cls_name, 0) + 1
-                    frame_classes.append(f"{cls_name} ({confidence:.0%})")
-
-                # Capture up to 8 snapshot highlights evenly spaced across detections
-                if len(keyframe_snapshots) < 8 and (frame_count % max(1, int(fps / 2)) == 0):
-                    _, thumb_buf = cv2.imencode(".jpg", annotated_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
-                    thumb_b64 = "data:image/jpeg;base64," + base64.b64encode(thumb_buf).decode("utf-8")
-                    time_sec = round(frame_count / fps, 1)
-                    keyframe_snapshots.append({
-                        "frame": frame_count,
-                        "time_sec": time_sec,
-                        "detected_count": boxes_in_frame,
-                        "classes": ", ".join(frame_classes[:4]),
-                        "image_base64": thumb_b64
-                    })
-
-                if len(detection_log) < 50:
-                    time_sec = round(frame_count / fps, 2)
+                boxes_in_frame = len(res.boxes)
+                if boxes_in_frame > 0:
+                    total_detections_across_frames += boxes_in_frame
+                    frame_classes = []
                     for box in res.boxes:
                         cls_id = int(box.cls[0].item())
                         cls_name = model.names.get(cls_id, f"class_{cls_id}")
                         confidence = float(box.conf[0].item())
-                        detection_log.append({
+                        xyxy = box.xyxy[0].tolist()
+                        class_occurrence[cls_name] = class_occurrence.get(cls_name, 0) + 1
+                        frame_classes.append(f"{cls_name} ({confidence:.0%})")
+
+                    # Capture up to 8 snapshot highlights evenly spaced across detections
+                    if len(keyframe_snapshots) < 8 and (frame_count % max(1, int(fps / 2)) == 0):
+                        _, thumb_buf = cv2.imencode(".jpg", annotated_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+                        thumb_b64 = "data:image/jpeg;base64," + base64.b64encode(thumb_buf).decode("utf-8")
+                        time_sec = round(frame_count / fps, 1)
+                        keyframe_snapshots.append({
+                            "frame": frame_count,
                             "time_sec": time_sec,
-                            "class_name": cls_name,
-                            "confidence": round(confidence, 3),
-                            "bbox": [round(c, 1) for c in box.xyxy[0].tolist()]
+                            "detected_count": boxes_in_frame,
+                            "classes": ", ".join(frame_classes[:4]),
+                            "image_base64": thumb_b64
                         })
+
+                    if len(detection_log) < 50:
+                        time_sec = round(frame_count / fps, 2)
+                        for box in res.boxes:
+                            cls_id = int(box.cls[0].item())
+                            cls_name = model.names.get(cls_id, f"class_{cls_id}")
+                            confidence = float(box.conf[0].item())
+                            detection_log.append({
+                                "time_sec": time_sec,
+                                "class_name": cls_name,
+                                "confidence": round(confidence, 3),
+                                "bbox": [round(c, 1) for c in box.xyxy[0].tolist()]
+                            })
+            else:
+                annotated_frame = latest_annotated_frame if latest_annotated_frame is not None else frame
 
             writer.send(annotated_frame)
             frame_count += 1
@@ -315,7 +325,11 @@ async def predict_video(
 def get_processed_video(filename: str):
     video_path = TEMP_VIDEO_DIR / filename
     if not video_path.exists():
-        raise HTTPException(status_code=404, detail="Processed video not found")
+        alt_path = BASE_DIR / "temp_outputs" / filename
+        if alt_path.exists():
+            video_path = alt_path
+        else:
+            raise HTTPException(status_code=404, detail="Processed video not found")
     return FileResponse(
         str(video_path),
         media_type="video/mp4",
@@ -335,4 +349,6 @@ if FRONTEND2_DIR.exists():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
+    # Use reload=False or reload_excludes to avoid dropping in-flight video requests
+    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=False)
+

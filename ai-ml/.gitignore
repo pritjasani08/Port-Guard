@@ -1,6 +1,7 @@
 # Datasets
 datasets/
 merged_dataset/
+temp_outputs/
 
 
 # Python and Environments
